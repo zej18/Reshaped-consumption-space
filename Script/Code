@@ -1,1 +1,636 @@
-Accession codes will be available before publication
+# Import Packages #
+
+#
+import numpy as np
+import pandas as pd
+import os
+import re
+import math
+import time
+import json
+import urllib
+
+#
+import requests
+import collections
+import cn2an
+
+#
+%matplotlib inline
+from shapely.geometry import Point
+import shapely.wkt
+import fiona
+import geopandas as gpd
+from geopandas import datasets, GeoDataFrame, read_file
+
+#
+import warnings
+warnings.filterwarnings("ignore")
+
+# Define Functions #
+
+#
+def ListAppend(LA,LI,LL,TA,CHN,i,j,SI):
+    #
+    LL.append(TA[CHN][i][j])
+    LI.append(SI)
+    LA.append(TA['NAddress'][i])
+    #
+    return LA,LI,LL;
+
+#
+def LoopAnalysis(CHN,TA):
+    #
+    LA,LI,LL = [],[],[]
+    #
+    if len(TA)>0:
+        #
+        i = 0
+        #
+        for SI in TA['fid']:
+            #
+            if len(TA[CHN][i])>1:
+                #
+                j = 0
+                #
+                for SL in range(len(TA[CHN][i])):
+                    #
+                    if SL == 0:
+                        #
+                        C = TA[CHN][i][j]
+                        ListAppend(LA,LI,LL,TA,CHN,i,j,SI)
+                    #
+                    else:
+                        #
+                        if TA[CHN][i][j] != C: 
+                            #
+                            ListAppend(LA,LI,LL,TA,CHN,i,j,SI)
+                    #
+                    j+=1
+            #
+            else:
+                #
+                ListAppend(LA,LI,LL,TA,CHN,i,j,SI)
+            #
+            i +=1
+    #
+    return LA,LI,LL;
+
+#
+def MultipleLayer(CHN,ENG):
+    #
+    NTA = Address[Address['L'+CHN]==1].reset_index(drop=True)
+    NTA['Layer']=NTA[CHN].apply(lambda x: x[0])
+    #
+    LDS=NTA.loc[:,['fid','NAddress','Layer']]
+    #
+    TA = Address[Address['L'+CHN]>1].reset_index(drop=True)
+    LA,LI,LL = LoopAnalysis(CHN,TA)
+    #
+    LD = pd.DataFrame()
+    LD['fid']= LI
+    LD['NAddress']=LA
+    LD['Layer']=LL
+    #
+    DataLC = pd.concat([LDS,LD],ignore_index=True) 
+    #
+    DataLC['Layer'] = DataLC['Layer'].astype(np.int64)
+    DataLC['fid'] = DataLC['fid'].astype(int)
+    DataLC['Note']=ENG
+    DataLC.drop_duplicates(subset=['fid', 'NAddress', 'Layer'], keep='first', inplace=True)
+    #
+    return DataLC
+
+# Add Path #
+
+#
+PathStep0City = 'F:/LeisureAnalysis/S0DataRaw/Cities'
+PathStep1Filter = 'F:/LeisureAnalysis/S1Reclassify/Filter'
+PathStep2Layer = 'F:/LeisureAnalysis/S2ObtainLayer/Layer'
+PathStep3Clip = 'F:/LeisureAnalysis/S3JoinRoad/Clip'
+PathStep3Join = 'F:/LeisureAnalysis/S3JoinRoad/JoinRoad'
+PathStep4Mall = 'F:/LeisureAnalysis/S4JoinMall/JoinMall'
+PathStep5Reclassify = 'F:/LeisureAnalysis/S5Reclassify/Reclassify'
+PathStep6Summary = 'F:/LeisureAnalysis/S6Datasummary/'
+
+#
+PathRoot = 'F:/LeisureAnalysis/S0DataClean/'
+PathStepCC = PathRoot+'/CentralCity/'
+PathStepCB = PathRoot+'/CentralBuilding/'
+PathStepCR = PathRoot+'CentralRoad/'
+PathStepCJ = PathRoot+'CentralRoadJoin/'
+
+#
+Year = ['2015','2019','2023']
+
+# Step1 -  Filter #
+
+#
+ListCols = [['shop_id', 'name', 'address', 'big_cate', 'small_cate', 'avg_price', 'stars', 'product_rating', 'environment_rating',
+            'service_rating', 'all_remarks', 'is_chains', 'wlng', 'wlat'],
+            ['id', 'name', '地址', 'b_type', 'm_type', 's_type', '价格', '星级', '评分', '评论数', '分店', 'wgs_lng', 'wgs_lat'],
+            ['店名', '地址', '一类', '二类', '三类', '价格', '星级', '评分', '评论数', '分店', 'lng', 'lat']]
+ListNCols = [['fid', 'Name', 'Address', 'Big_cate', 'Small_cate', 'Avg_price', 'Stars', 'Product_rating', 'Environment_rating',
+                'Service_rating', 'All_remarks', 'Is_chains', 'wgslng', 'wgslat'],
+             ['fid', 'Name', 'Address', 'Big_cate', 'Small_cate', 'S_type', 'Avg_price', 'Stars', 'Rating', 'All_remarks', 'Is_chains', 
+                'wgslng', 'wgslat'],
+             ['Name', 'Address', 'Big_cate', 'Small_cate', 'S_type', 'Avg_price', 'Stars', 'Rating', 'All_remarks', 'Is_chains', 
+              'wgslng', 'wgslat'] ]
+
+#
+for Ri in range(3):
+    #
+    FileDirYear = PathStep0City+Year[Ri]
+    #
+    for SFD in FileDirYear:
+        #
+        TempCity = pd.read_csv(FileDirYear + '/' + SFD, low_memory=False)
+        CityName = SFD.split('.')[0]  # Extract city name from file name
+        # Define the columns to keep and their new names
+        cols = ListCols[i]
+        new_cols = ListNCols[i]
+        # Filter and rename columns
+        TempCity = TempCity[cols]
+        TempCity = TempCity[cols].rename(columns=dict(zip(cols, new_cols)))
+        # Add city and year information
+        TempCity['City'] = CityName
+        TempCity['Year'] = Year[Ri]
+        # Save the processed data to a new CSV file
+        TempCity.to_csv(PathStep1Filter+Year[Ri]+ '/' + CityName + '.csv')
+
+# Step2 -  ObtainLayer #
+
+#
+for Ri in range(3):
+    #
+    FileDirYear = PathStep1Filter+Year[Ri]
+    #
+    for SFD in FileDirYear:
+        #
+        CityName = SFD.split('.')[0]
+        Leisure = pd.read_csv(FileDirYear+'/'+SFD, low_memory=False)
+        #
+        Addlist = Leisure['Address'].values.astype(str)
+        NA = []
+        #
+        for i in Addlist:
+            #
+            NA.append(cn2an.transform(i, "cn2an"))
+        #
+        Address = Leisure[['fid','Address']]
+        Address.loc[:, 'TAddress'] = NA
+        Address.loc[:, 'NAddress'] = Address['TAddress'].str.replace(r'[\(（][^()（）]*[\)）]', '')
+        #
+        Lou,Ceng,F,Shi,Jian,Hao,Fu,DS,DX = [],[],[],[],[],[],[],[],[]
+        #
+        for i in Address['NAddress']:
+            #
+            Lou.append(re.compile('(\d+)楼').findall(i))
+            Ceng.append(re.compile('(\d+)层').findall(i))
+            F.append(re.compile('F(\d+)').findall(i))
+            Shi.append(re.compile('(\d+)室').findall(i))
+            Fu.append(re.compile('B(\d+)楼|B(\d+)层|b(\d+)楼|b(\d+)层|负(\d+)楼|负(\d+)层|地下(\d+)楼|地下(\d+)层').findall(i))
+            #
+            result5 = re.compile(r"\d+$").findall(i)[-1] if re.compile(r"\d+$").search(i) else ""
+            Jian.append(result5)
+            #
+            result6 = int(re.compile('\d+号$').findall(i)[-1][:-1]) if re.compile('\d+号$').findall(i) and not re.compile('(\d+)楼').search(i) else ""
+            result6 = str(result6) if isinstance(result6, int) else result6  # 将结果转换为字符串类型
+            Hao.append(result6)
+            #
+            result7 = 1 if '底商'in i or i.endswith('附近') or i.endswith('对面') else 0
+            DS.append(result7)
+            #
+            result8 = 1 if '地下' in i else 0
+            DX.append(result8)
+        #
+        Address.loc[:, '楼'] = Lou 
+        Address.loc[:, '层'] = Ceng 
+        Address.loc[:, 'F'] = F 
+        Address.loc[:, '室'] = Shi 
+        Address.loc[:, '间'] = Jian 
+        Address.loc[:, '号'] = Hao 
+        Address.loc[:, '负'] = Fu 
+        Address.loc[:, '底商'] = DS 
+        Address.loc[:, '地下'] = DX 
+        #
+        LL,LC,LFC,LS,LJ,LH,LF = [],[],[],[],[],[],[]
+        #
+        for i in Address['楼']: LL.append(len(i))
+        for i in Address['层']: LC.append(len(i))
+        for i in Address['F']: LFC.append(len(i))
+        for i in Address['室']: LS.append(len(i))
+        for i in Address['间']: LJ.append(len(i))
+        for i in Address['号']: LH.append(len(i))
+        for i in Address['负']: LF.append(len(i))
+        #
+        Address.loc[:,'L楼'] = LL 
+        Address.loc[:,'L层'] = LC 
+        Address.loc[:,'LF'] = LFC 
+        Address.loc[:,'L室'] = LS 
+        Address.loc[:,'L间'] = LJ 
+        Address.loc[:,'L号'] = LH 
+        Address.loc[:,'L负'] = LF
+        #
+        DataCeng = MultipleLayer('层','Ceng')
+        DataFC = MultipleLayer('F','F')
+        DataLou = MultipleLayer('楼','Lou')
+        #
+        try:
+            #
+            Shi = Address[Address['L室']>0]
+            NTA = Shi[Shi['L室']==1].reset_index(drop=True)
+            NTA['LS']=NTA['室'].apply(lambda x: len(x[0]))
+            NTA = NTA[(NTA['LS']==3) | (NTA['LS']== 4) ]
+            NTA['Layer']=NTA['室'].apply(lambda x: x[0][:-2])
+            LDS=NTA.loc[:,['fid','NAddress','Layer']]
+            TA = Shi[Shi['L室']>1].reset_index(drop=True)
+            #
+            LA,LI,LL = LoopAnalysis('室',TA)
+            LD = pd.DataFrame(LI)
+            LD.columns=['fid']
+            LD ['NAddress']=LA
+            LD ['L']=LL
+            LD['LS']=LD['L'].apply(lambda x: len(x))
+            LD = LD[(LD['LS']==3) | (LD['LS']== 4) ]
+            LD['Layer']=LD['L'].apply(lambda x: x[:-2])
+            LDM=LD.loc[:,['fid','NAddress','Layer']]
+            #
+            DataShi = pd.concat([LDS,LDM],ignore_index=True)
+            #DataShi['Layer'] = DataShi['Layer'].astype(int)
+            DataShi['Layer'] = DataShi['Layer'].replace(0, 1)
+            DataShi['Note']='Shi'
+            DataShi.drop_duplicates(subset=['fid', 'NAddress', 'Layer'], keep='first', inplace=True)
+        #
+        except:
+            # 如果以上报错
+            Shi = Address[Address['L室']>0]
+            NTA = Shi[Shi['L室']==1].reset_index(drop=True)
+            NTA['LS']=NTA['室'].apply(lambda x: len(x[0]))
+            NTA = NTA[(NTA['LS']==3) | (NTA['LS']== 4) ]
+            NTA['Layer']=NTA['室'].apply(lambda x: x[0][:-2])
+            LDS=NTA.loc[:,['fid','NAddress','Layer']]
+            #
+            DataShi = LDS
+            DataShi['Layer'] = DataShi['Layer'].replace(0, 1)
+            DataShi['Note']='Shi'
+            DataShi.drop_duplicates(subset=['fid', 'NAddress', 'Layer'], keep='first', inplace=True)
+        #
+        Jian = Address[Address['L间']>2]
+        Jian.loc[:,'Layer']=Jian['间'].apply(lambda x: x[:-2])
+        DataJian=Jian.loc[:,['fid','NAddress','Layer']].reset_index(drop=True)
+        DataJian['Note']='Jian'
+        DataJian.drop_duplicates(subset=['fid', 'NAddress', 'Layer'], keep='first', inplace=True)
+        #
+        Hao = Address[Address['L号']>2]
+        Hao.loc[:,'Layer']=Hao['号'].apply(lambda x: x[:-2])
+        DataHao=Hao.loc[:,['fid','NAddress','Layer']].reset_index(drop=True)
+        DataHao['Note']='Hao'
+        DataHao.drop_duplicates(subset=['fid', 'NAddress', 'Layer'], keep='first', inplace=True)
+        #
+        Fu= Address[Address['L负']>0]
+        FuR=Fu.reset_index(drop=True)
+        #
+        try:
+            #
+            PL = [FuR['fid'][0]]
+            #
+            for SFL in FuR['负'][0]: 
+                #
+                if len(SFL) > 0:
+                    #
+                    LL = [SFL[0]] 
+            #
+            i = 1
+            #
+            for SF in FuR['负'][1:]:
+                #
+                if len(SF) >= 1:
+                    #
+                    for SFL in SF:
+                        #
+                        for SFLL in SFL:
+                            #print(len(SFLL))
+                            if len(SFLL) > 0: 
+                                #print(SFLL)
+                                LL.append(SFLL)
+                                PL.append(FuR['fid'][i])
+                #
+                i += 1
+            #
+            DPL = pd.DataFrame(PL)
+            DLL = pd.DataFrame(LL)
+            FuL = pd.concat([DPL,DLL], axis=1)
+            FuL.columns=['fid','Layer']
+            LDS=Fu.loc[:,['fid','NAddress']]
+            DataFu = pd.merge(LDS,FuL,on='fid',how='outer')
+            #
+            DataFu['Layer'] = DataFu['Layer'].replace(0, 1)
+            DataFu['Note']='Fu'
+            #
+            FuPOI=Fu['fid'].unique().tolist()
+        #
+        except:
+            #
+            dic={"fid":[0],"NAddress":['空'],"Layer":[0],"Note":['Fu']}
+            DataFu=pd.DataFrame(dic)
+            FuPOI = [0]
+        #
+        DX = Address[Address['地下']>0]
+        DX = DX[~DX['fid'].isin(FuPOI)]
+        DX = DX.loc[:,['fid','NAddress']]
+        DX['Layer'] = 1
+        DX['Note']='DX'
+        #
+        DataDX = pd.concat([DataFu,DX],ignore_index=True)
+        DataDX['Layer'] = DataDX['Layer'].replace('', '1').apply(lambda x: int(x)*-1)
+        #
+        DS= Address[(Address['底商']>0)]
+        DataDS = DS.loc[:,['fid','NAddress']]
+        DataDS['Layer']=1
+        DataDS['Note']='DS'
+        # 将多个数据框纵向拼接
+        DataAll = pd.concat([DataDS, DataDX, DataCeng, DataFC, DataLou,DataShi,DataJian,DataHao], ignore_index=True)
+        DataAll.drop_duplicates(subset=['fid', 'NAddress', 'Layer'], keep='first', inplace=True)
+        #
+        ListOrder = ['DS','Fu','DX','Ceng','F','Lou']
+        i = 0
+        #
+        for OrderS in ListOrder:
+            #
+            if i == 0:
+                #
+                ListDS = DataAll[DataAll['Note'] == OrderS]
+                DS_drop = ListDS['fid'].unique().tolist()
+                KeepTemp = DataAll[~DataAll['fid'].isin(DS_drop)]
+            #
+            else:
+                #
+                ListDS = AppendTemp[AppendTemp['Note'] == OrderS]
+                DS_drop = ListDS['fid'].unique().tolist()
+                KeepTemp = AppendTemp[~AppendTemp['fid'].isin(DS_drop)]
+            #
+            i += 1
+            AppendTemp = pd.concat([ListDS,KeepTemp],axis=0,ignore_index=True)
+        #
+        DataLA11 = AppendTemp
+        # 在DataLA11上添加条件
+        condition = (DataLA11['Note'] == 'Hao') & (~DataLA11['NAddress'].str.contains('厦|座|栋|幢|写字楼|广场|单元|中心|公寓|酒店|号楼'))
+        DataLA11.loc[condition, 'Layer'] = 1
+        DataLA11['Layer'] = DataLA11['Layer'].apply(lambda x:int(x))
+        DataLA11 =DataLA11[(DataLA11['Layer'] > -4) & (DataLA11['Layer'] < 110)]
+        #
+        LayerAll = pd.merge(Leisure,DataLA11,on='fid',how='outer')
+        LayerAll['Layer'] = LayerAll['Layer'].fillna(1).astype(int)
+        LayerAll['Note'] = LayerAll['Note'].fillna('Others')
+        LayerAll = LayerAll.reset_index()
+        LayerAll = LayerAll.fillna(0)
+        #
+        LayerAll.loc[:,'GF'] = (LayerAll['Layer']== 1).astype(int)
+        #
+        LayerAll['LayerType'] = LayerAll['Layer'].apply(lambda x: '1 Underground'  if x >= -4 and x <0  
+                                                                             else('2 Ground floor' if x == 1 
+                                                                                 else('3 Low rise' if x < 4 
+                                                                                     else('4 Mid rise' if x <7
+                                                                                         else('5 High rise L1' if x < 11
+                                                                                             else('6 High rise L2' if x < 30
+                                                                                                  else('7 High rise L3' if x < 100 else '8 Extra high rise' )))))))
+        #
+        LayerAll = LayerAll.reset_index(drop=True)
+        #
+        LayerAll.to_csv(PathStep2Layer+Year[Ri]+ '/' + CityName+'.csv')
+
+# Step3 -  Join Road #
+
+#
+for Ri in range(3):
+    #
+    ListCT = os.listdir(PathStepCC)
+    ListB = os.listdir(PathStep2Layer+Year[Ri])
+    ListOP = os.listdir(PathStep3Clip+Year[Ri])
+    #
+    for SFD in ListB:
+        #
+        if SFD not in ListOP:
+            #
+            CityName = SFD.split('.')[0]
+            Leisure = pd.read_csv(PathStep1Filter+Year[Ri]+'/'+SFD, low_memory=False)
+            POI = gpd.GeoDataFrame(Leisure, geometry=gpd.points_from_xy(Leisure['wgslng'], Leisure[ 'wgslat']), crs="EPSG:4326")
+            #
+            CentralC = read_file(DirCT+CityName+'.gpkg')
+            CentralC = CentralC.to_crs("EPSG:4326")
+            TempClip = gpd.clip(POI, CentralC).reset_index(drop=False)
+            #
+            TempClip.to_csv(DirOP+CityName+'.csv')
+
+# Set Path
+ListB = os.listdir(PathStepCB)
+ListR = os.listdir(PathStepCR)
+ListCC = os.listdir(PathStepCC)
+ListOP = os.listdir(PathStepCJ)
+
+#
+for SinB in ListB: 
+    #
+    TempFN = SinB.split('C')[1]
+    #
+    if TempFN not in ListOP:
+        #
+        try:
+            TempRoad = read_file(PathStepCR+'RC'+TempFN, low_memory=False)
+            TempRoad = TempRoad.reset_index(drop=True)
+            TempRoad = TempRoad.to_crs('esri:54004')
+            #
+            TempBuilding = read_file(PathStepCB+SinB, low_memory=False)
+            TempBuilding = TempBuilding.to_crs('esri:54004')
+            TempBuilding = TempBuilding.reset_index(drop=True)
+            #
+            TempJoin = TempRoad.sjoin_nearest(TempBuilding, how="left", distance_col="distance",max_distance=600)
+            TempJoin.to_file(PathStepCJ+TempFN)
+        #
+        except:
+            #
+            print(TempFN)
+
+# 创建一个空的数据框
+df = pd.DataFrame(columns=['City', 'count'])
+# 遍历文件夹中的文件
+for file_name in os.listdir(PathStepCB):
+    #
+    file_path = os.path.join(PathStepCB, file_name)
+    # 如果是 GeoPackage 文件而不是文件夹
+    if os.path.isfile(file_path) and file_name.endswith('.gpkg'):
+        # 读取 GeoPackage 文件并统计要素数量
+        with fiona.open(file_path, 'r') as src:
+            #
+            feature_count = len(list(src))
+        # 将文件名和要素数量添加到数据框中
+        df = df.append({'City': file_name, 'count': feature_count}, ignore_index=True)
+# 保存结果为 CSV 文件
+df.to_csv(PathRoot+'Building2018BDsummary.csv', index=False)
+
+
+#
+for Ri in range(3):
+    #
+    ListCT = os.listdir(PathStepCC)
+    ListB = os.listdir(PathStep3Clip+Year[Ri])
+    ListOP = os.listdir(PathStep3Join+Year[Ri])
+    #
+    for SFD in ListB:
+        #
+        if SFD not in ListOP:
+            #
+            try:
+                #
+                CityName = SFD.split('.')[0]
+                #
+                Leisure = pd.read_csv(PathStep3Clip+Year[Ri]+'/'+SFD, low_memory=False)
+                #
+                geometry = Leisure['geometry'].map(shapely.wkt.loads)
+                TempPOI = gpd.GeoDataFrame(Leisure, crs="EPSG:4326", geometry=geometry)
+                #
+                del TempPOI['level_0']
+                del TempPOI['index']
+                del TempPOI['Unnamed: 0']
+                del TempPOI['Unnamed: 0.1']
+                del TempPOI['Unnamed: 0.1.1']
+                #
+                TempPOI = TempPOI.to_crs('esri:54004')
+                #
+                TempRoad = read_file(PathStepCJ+CityName+'.gpkg')
+                TempRoad = TempRoad.to_crs('esri:54004')
+                TempRoad = TempRoad.reset_index(drop=True)
+                #
+                del TempRoad['index_right']
+                del TempRoad['layer']
+                del TempRoad['path']
+                #
+                TempJoin = TempPOI.sjoin_nearest(TempRoad, how="left", distance_col="distance2",max_distance=600)
+                TempJoin = TempJoin.drop_duplicates(subset="fid")
+                TempJoin = TempJoin.reset_index(drop=True)
+                #
+                TempJoin.to_csv(DirOP+'/'+CityName+'.csv')
+            #
+            except:
+                #
+                print(CityName)
+
+# Step 4 - Join Mall #
+
+#
+DataMall = read_file(PathRoot+'/Shoppingmall.gpkg')
+DataMall = DataMall[['CATEGORY','geometry']]
+DataMall = DataMall.to_crs('esri:54004')
+DataMall['Shoppingmall']=1
+
+#
+for Ri in range(3):
+    #
+    ListB = os.listdir(PathStep3Join+Year[Ri])
+    ListOP = os.listdir(PathStep4Mall+Year[Ri])
+    #
+    i = 0
+    #
+    for SFD in ListB:
+        #
+        CityName = SFD.split('.')[0]
+        #
+        try:
+            #
+            if SFD not in ListOP:
+                #
+                TempCity = pd.read_csv(PathStep3Join+Year[Ri]+'/'+SFD, low_memory=False)
+                geometry = TempCity['geometry'].map(shapely.wkt.loads)
+                TempCity = gpd.GeoDataFrame(TempCity, crs="esri:54004", geometry=geometry)
+                #
+                del TempCity['Unnamed: 0']
+                del TempCity['index_right']
+                #
+                DisTemp = gpd.sjoin(TempCity, DataMall, how='left', op='intersects')
+                DisTemp['Shoppingmall'] = DisTemp['Shoppingmall'].fillna(0).astype(int)
+                DisTemp = DisTemp.drop_duplicates(subset="fid")
+                DisTemp = DisTemp.reset_index(drop=True)
+                #
+                DisTemp['D_Bldback'] = DisTemp['distance2'] - DisTemp['distance']
+                DisTemp['FS10'] = (DisTemp['D_Bldback']<= 10).astype(int)
+                DisTemp['FS15'] = (DisTemp['D_Bldback']<= 15).astype(int)
+                DisTemp['FS20'] = (DisTemp['D_Bldback']<= 20).astype(int)
+                DisTemp['FS25'] = (DisTemp['D_Bldback']<= 25).astype(int)
+                DisTemp['FS30'] = (DisTemp['D_Bldback']<= 30).astype(int)
+                DisTemp['Valid'] = np.where((~DisTemp['distance'].isnull()) & (~DisTemp['distance2'].isnull()), 1, 0)
+                #
+                DisTemp.to_csv(PathStep4Mall+Year[Ri]+'/'+CityName+'.csv')
+        #
+        except:
+            #
+            print(CityName)
+
+# Step 5 - Reclassify #
+
+#
+for Ri in range(3):
+    #
+    ReYear = pd.read_csv('F:/LeisureAnalysis/S5Reclassify/类别整理/Reclassify'+Year[Ri]+'.csv')
+    FileDir = os.listdir(PathStep5Reclassify+Year[Ri])
+    #
+    for SD in FileDir:
+        #
+        DPYear = pd.read_csv(PathStep4Mall+Year[Ri]+'/'+SD,low_memory=False)
+        DPYear['Big_cate'] = DPYear['Big_cate'].fillna('其他')
+        DPYear['Small_cate'] = DPYear['Small_cate'].fillna('其他')
+        DPYear['Big_cate'] = DPYear['Big_cate'].replace('0','其他')
+        DPYear['Small_cate'] = DPYear['Small_cate'].replace('0','其他')
+        #
+        try:
+            #
+            DPYear['S_type'] = DPYear['S_type'].fillna('其他')
+            DPYear['S_type'] = DPYear['S_type'].replace('0','其他')
+            DPReYear = pd.merge(DPYear,ReYear,on=['Big_cate','Small_cate','S_type'])
+        #
+        except:
+            #
+            DPReYear = pd.merge(DPYear,ReYear,on=['Big_cate','Small_cate'])
+        #
+        DPReYear =  DPReYear.drop(['Unnamed: 0'], axis=1)
+        DPReYear.to_csv(PathStep5Reclassify+Year[Ri]+'/'+SD)
+
+# Step 6 - Summary #
+
+#
+for Ri in range(3):
+    #
+    RListYear = os.listdir(PathStep5Reclassify+Year[Ri])
+    #
+    i = 0
+    #
+    for RYear in RListYear:
+        #           #
+        TempCity = pd.read_csv(RListYear+'/'+RYear, low_memory=False)
+        #TempCity = TempCity.drop_duplicates(subset=['Name','Address','Layer'])
+        TempCity = TempCity.drop_duplicates(subset=['Name','Address'])
+        TempCity = TempCity[~TempCity['Big_cate_New'].isin(['地址'])]
+        TempCity = TempCity[['City','Cate_New', 'Big_cate_New', 'Small_cate_New','All_remarks','GF', 'FS10', 'FS15','FS20', 'FS25',
+                             'FS30','Shoppingmall','Valid']]
+        #
+        TempCity['Count'] = 1
+        TempCityESM = TempCity[TempCity['Shoppingmall']==0]
+        TempCityESM = TempCityESM[TempCityESM['Valid']==1]
+        #
+        TempGroup = TempCityESM.groupby(['City']).sum(['GF', 'FS10', 'FS15','FS20', 'FS25', 'FS30','All_remarks','Count'])
+        TempGroup['Index'] = TempGroup.index
+        TempGroup = TempGroup.reset_index(drop=True)
+        TempGroup['City'] = RYear.split(".")[0]
+        TempGroup['Year'] = Year[Ri]
+        #
+        if i == 0: 
+            #
+            GroupAll = TempGroup
+        else: 
+            #
+            GroupAll = pd.concat([GroupAll, TempGroup], ignore_index=True, sort=False)
+        #
+        i += 1
+    #
+    GroupAll.to_csv(PathStep6Summary+'/Mall'+Year[Ri]+'DDSM.csv')
+

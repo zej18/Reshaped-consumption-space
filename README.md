@@ -1,4 +1,4 @@
-Expansion of urban commercial establishments from streets and ground in China’s digital era
+# Expansion of urban commercial establishments from streets and ground in China’s digital era
 
 This repository documents the data and scripts for the paper "Expansion of urban commercial establishments from streets and ground in China’s digital era". 
 

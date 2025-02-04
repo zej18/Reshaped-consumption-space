@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/96271afa-8a0a-4602-aaab-f8299a710044)# Expansion of urban commercial establishments from streets and ground in China’s digital era
+Expansion of urban commercial establishments from streets and ground in China’s digital era
 
 This repository documents the data and scripts for the paper "Expansion of urban commercial establishments from streets and ground in China’s digital era". 
 

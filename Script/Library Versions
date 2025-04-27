@@ -1,0 +1,10 @@
+=== === Library Versions ===
+pandas==2.1.4
+seaborn==0.12.2
+plotly==5.9.0
+matplotlib==3.8.0
+pandas==2.1.4
+seaborn==0.12.2
+plotly==5.9.0
+matplotlib==3.8.0
+svgwrite==1.4.3
